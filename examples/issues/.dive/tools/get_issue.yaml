@@ -1,0 +1,41 @@
+version: 5
+name: get_issue
+description: Reads one issue by id, with the tenant it belongs to and who filed it.
+kind: http
+generated: dive-go
+method: POST
+url: ${APP_URL}/dive/tools/get_issue
+read_only: true
+input_schema:
+  additionalProperties: false
+  properties:
+    id:
+      description: The issue's id, such as ISS-1
+      type: string
+  required:
+    - id
+  type: object
+output_schema:
+  additionalProperties: false
+  properties:
+    body:
+      type: string
+    created_by:
+      description: Who filed the issue
+      type: string
+    id:
+      type: string
+    priority:
+      type: string
+    tenant:
+      description: The workspace the issue belongs to
+      type: string
+    title:
+      type: string
+  required:
+    - id
+    - title
+    - priority
+    - tenant
+    - created_by
+  type: object

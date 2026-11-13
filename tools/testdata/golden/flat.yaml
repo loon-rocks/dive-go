@@ -1,0 +1,38 @@
+version: 5
+name: flat
+description: Flat input with optional fields.
+kind: http
+generated: dive-go
+method: POST
+url: ${APP_URL}/dive/tools/flat
+read_only: false
+input_schema:
+  additionalProperties: false
+  properties:
+    body:
+      description: Markdown details
+      type: string
+    count:
+      type: integer
+    ratio:
+      type: number
+    title:
+      description: One-line summary of the problem
+      type: string
+    urgent:
+      type: boolean
+  required:
+    - title
+    - count
+  type: object
+output_schema:
+  additionalProperties: false
+  properties:
+    id:
+      type: string
+    url:
+      type: string
+  required:
+    - id
+    - url
+  type: object

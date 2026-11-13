@@ -1,0 +1,300 @@
+package tools
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io/fs"
+	"maps"
+	"math"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+
+	"go.yaml.in/yaml/v3"
+)
+
+// ToolFileVersion is the version field of the tool files that
+// [Registry.Generate] writes.
+const ToolFileVersion = 5
+
+type retryFile struct {
+	Attempts int `yaml:"attempts"`
+}
+
+type toolFile struct {
+	Version      int            `yaml:"version"`
+	Name         string         `yaml:"name"`
+	Description  string         `yaml:"description"`
+	Kind         string         `yaml:"kind"`
+	Generated    string         `yaml:"generated"`
+	Method       string         `yaml:"method"`
+	URL          string         `yaml:"url"`
+	ReadOnly     bool           `yaml:"read_only"`
+	TimeoutSecs  int64          `yaml:"timeout_secs,omitempty"`
+	Retry        *retryFile     `yaml:"retry,omitempty"`
+	InputSchema  map[string]any `yaml:"input_schema"`
+	OutputSchema map[string]any `yaml:"output_schema"`
+}
+
+func (r *Registry) render(t *tool) ([]byte, error) {
+	file := toolFile{
+		Version:      ToolFileVersion,
+		Name:         t.def.Name,
+		Description:  t.def.Description,
+		Kind:         "http",
+		Generated:    Generator,
+		Method:       "POST",
+		URL:          r.baseURL + "/" + t.def.Name,
+		ReadOnly:     t.settings.readOnly,
+		InputSchema:  t.input,
+		OutputSchema: t.output,
+	}
+	if t.settings.timeout > 0 {
+		file.TimeoutSecs = int64(math.Ceil(t.settings.timeout.Seconds()))
+	}
+	if t.settings.retry > 0 {
+		file.Retry = &retryFile{Attempts: t.settings.retry}
+	}
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(file); err != nil {
+		return nil, fmt.Errorf("tools: %s: %w", t.def.Name, err)
+	}
+	if err := enc.Close(); err != nil {
+		return nil, fmt.Errorf("tools: %s: %w", t.def.Name, err)
+	}
+	return buf.Bytes(), nil
+}
+
+// Files returns the tool file of each tool in r, keyed by file name,
+// which is the tool's name followed by ".yaml". Each file is a Dive tool
+// definition of kind http that calls the tool with POST at the base URL
+// followed by the tool's name, and is marked generated: dive-go. The
+// bytes depend only on the tools, so they are the same on every run.
+func (r *Registry) Files() (map[string][]byte, error) {
+	files := map[string][]byte{}
+	for _, t := range r.sorted() {
+		data, err := r.render(t)
+		if err != nil {
+			return nil, err
+		}
+		files[t.def.Name+".yaml"] = data
+	}
+	return files, nil
+}
+
+type existing struct {
+	path      string
+	data      []byte
+	name      string
+	generated string
+}
+
+func scan(dir string) (map[string]existing, error) {
+	found := map[string]existing{}
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return found, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		ext := filepath.Ext(entry.Name())
+		if ext != ".yaml" && ext != ".yml" {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		var head struct {
+			Name      string `yaml:"name"`
+			Generated string `yaml:"generated"`
+		}
+		_ = yaml.Unmarshal(data, &head)
+		found[entry.Name()] = existing{path: path, data: data, name: head.Name, generated: head.Generated}
+	}
+	return found, nil
+}
+
+type plan struct {
+	write    map[string][]byte
+	remove   []string
+	problems []Problem
+}
+
+func (r *Registry) plan(dir string) (*plan, error) {
+	want, err := r.Files()
+	if err != nil {
+		return nil, err
+	}
+	have, err := scan(dir)
+	if err != nil {
+		return nil, fmt.Errorf("tools: can't read %s: %w", dir, err)
+	}
+	p := &plan{write: map[string][]byte{}}
+	for _, file := range slices.Sorted(maps.Keys(have)) {
+		got := have[file]
+		_, wanted := want[file]
+		ours := got.generated == Generator
+		switch {
+		case wanted && !ours:
+			p.problems = append(p.problems, Problem{File: file, Kind: ProblemHandWritten})
+		case !wanted && ours:
+			p.remove = append(p.remove, file)
+			p.problems = append(p.problems, Problem{File: file, Kind: ProblemStale})
+		case !wanted && !ours && registered(want, got.name):
+			p.problems = append(p.problems, Problem{File: file, Kind: ProblemHandWritten})
+		}
+	}
+	for _, file := range slices.Sorted(maps.Keys(want)) {
+		got, ok := have[file]
+		switch {
+		case !ok:
+			p.write[file] = want[file]
+			p.problems = append(p.problems, Problem{File: file, Kind: ProblemMissing})
+		case got.generated == Generator && !bytes.Equal(got.data, want[file]):
+			p.write[file] = want[file]
+			p.problems = append(p.problems, Problem{File: file, Kind: ProblemDiffers, Diff: diff(string(got.data), string(want[file]))})
+		}
+	}
+	return p, nil
+}
+
+func registered(want map[string][]byte, name string) bool {
+	if name == "" {
+		return false
+	}
+	_, ok := want[name+".yaml"]
+	return ok
+}
+
+// Generate makes dir, usually .dive/tools, match the tools in r: it
+// writes the files from [Registry.Files] that are missing or differ, and
+// removes files generated by dive-go for tools that r no longer has. It
+// creates dir when needed and leaves every other file alone.
+//
+// Generate refuses to replace a file it didn't generate. When dir holds a
+// hand-written file with the name of a tool's file, or a hand-written
+// file whose name field is a tool's name, Generate returns an error
+// naming the files and changes nothing.
+//
+// Call it from a program run by go generate; see the package
+// documentation.
+func (r *Registry) Generate(dir string) error {
+	p, err := r.plan(dir)
+	if err != nil {
+		return err
+	}
+	var refused []string
+	for _, problem := range p.problems {
+		if problem.Kind == ProblemHandWritten {
+			refused = append(refused, problem.File)
+		}
+	}
+	if len(refused) > 0 {
+		return fmt.Errorf("tools: refusing to overwrite %s in %s: not generated by %s; remove or rename it, or rename the Go tool", strings.Join(refused, ", "), dir, Generator)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("tools: %w", err)
+	}
+	for _, file := range p.remove {
+		if err := os.Remove(filepath.Join(dir, file)); err != nil {
+			return fmt.Errorf("tools: %w", err)
+		}
+	}
+	for _, file := range slices.Sorted(maps.Keys(p.write)) {
+		if err := os.WriteFile(filepath.Join(dir, file), p.write[file], 0o644); err != nil {
+			return fmt.Errorf("tools: %w", err)
+		}
+	}
+	return nil
+}
+
+// Check reports whether dir matches the tools in r, without changing it.
+// It returns nil when [Registry.Generate] would change nothing, and
+// otherwise a [*CheckError] listing each file that is missing, differs,
+// is stale or is hand-written, with a diff for each file that differs.
+// Call it from a test so that a forgotten go generate fails CI.
+func (r *Registry) Check(dir string) error {
+	p, err := r.plan(dir)
+	if err != nil {
+		return err
+	}
+	if len(p.problems) == 0 {
+		return nil
+	}
+	return &CheckError{Dir: dir, Problems: p.problems}
+}
+
+// ProblemKind says how a file in a tools directory disagrees with a
+// [Registry], in a [Problem].
+type ProblemKind string
+
+// The kinds of [Problem].
+const (
+	// ProblemMissing means a registered tool has no file.
+	ProblemMissing ProblemKind = "missing"
+	// ProblemDiffers means a generated file's contents differ from what
+	// [Registry.Files] returns for its tool.
+	ProblemDiffers ProblemKind = "differs"
+	// ProblemStale means a generated file belongs to a tool that is no
+	// longer registered.
+	ProblemStale ProblemKind = "stale"
+	// ProblemHandWritten means a file not generated by dive-go has a
+	// registered tool's file name or tool name. [Registry.Generate]
+	// refuses to replace it.
+	ProblemHandWritten ProblemKind = "hand-written"
+)
+
+// Problem is one file that disagrees with a [Registry], as a
+// [*CheckError] lists it.
+type Problem struct {
+	// File is the file's name within the directory.
+	File string
+
+	// Kind says how the file disagrees.
+	Kind ProblemKind
+
+	// Diff is a line diff from the file on disk to the file from the
+	// code, for a [ProblemDiffers] problem. It is empty otherwise.
+	Diff string
+}
+
+// CheckError is returned by [Registry.Check] when a directory disagrees
+// with the registry.
+type CheckError struct {
+	// Dir is the directory that was checked.
+	Dir string
+
+	// Problems lists the files that disagree.
+	Problems []Problem
+}
+
+// Error describes each problem on its own lines, with the diff of each
+// file that differs, and says to run go generate.
+func (e *CheckError) Error() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s disagrees with the Go tools; run go generate:\n", e.Dir)
+	for _, p := range e.Problems {
+		switch p.Kind {
+		case ProblemMissing:
+			fmt.Fprintf(&b, "\n%s: missing; the tool is registered in code\n", p.File)
+		case ProblemStale:
+			fmt.Fprintf(&b, "\n%s: generated for a tool that's no longer registered\n", p.File)
+		case ProblemHandWritten:
+			fmt.Fprintf(&b, "\n%s: written by hand for a tool name the Go code registers; Generate won't overwrite it\n", p.File)
+		case ProblemDiffers:
+			fmt.Fprintf(&b, "\n%s: differs from the code\n--- %s (on disk)\n+++ %s (from code)\n%s", p.File, p.File, p.File, p.Diff)
+		}
+	}
+	return b.String()
+}

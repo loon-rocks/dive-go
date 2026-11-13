@@ -1,0 +1,23 @@
+version: 3
+identifier: greet
+name: Greet
+description: Greets someone without a model call.
+input_schema:
+  type: object
+  required: [name]
+  properties:
+    name: { type: string }
+output_schema:
+  type: object
+  required: [greeting]
+  properties:
+    greeting: { type: string }
+steps:
+  - id: E0
+    tool_name: builtin__reshape
+    input:
+      shape:
+        greeting: "hello {{input.name}}"
+finish:
+  output:
+    greeting: "{{E0.greeting}}"

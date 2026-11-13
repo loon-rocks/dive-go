@@ -1,0 +1,16 @@
+event: entry
+id: 1
+data: {"seq":1,"run_id":"28e67bc9-d9e7-4995-ab9e-fbb663d6592b","at":1794543685254,"author":"run","kind":"run_started","input":{"name":"ada"},"identity":{"user":"ada@example.com","tenant":"acme","deployment":"serve","environment":"development"},"plan":{"description":"Greets someone without a model call.","finish":{"output":{"greeting":"{{E0.greeting}}"}},"identifier":"greet","input_schema":{"properties":{"name":{"type":"string"}},"required":["name"],"type":"object"},"name":"Greet","output_schema":{"properties":{"greeting":{"type":"string"}},"required":["greeting"],"type":"object"},"steps":[{"id":"E0","input":{"shape":{"greeting":"hello {{input.name}}"}},"reasoning":null,"toolName":"builtin__reshape"}]}}
+
+event: entry
+id: 2
+data: {"seq":2,"run_id":"28e67bc9-d9e7-4995-ab9e-fbb663d6592b","path":"step:E0","at":1794543685257,"author":"run","kind":"step_started","step":"E0","tool":"builtin__reshape","input":{"shape":{"greeting":"hello ada"}}}
+
+event: entry
+id: 3
+data: {"seq":3,"run_id":"28e67bc9-d9e7-4995-ab9e-fbb663d6592b","path":"step:E0","at":1794543685257,"author":"run","kind":"step_finished","step":"E0","output":{"greeting":"hello ada"}}
+
+event: entry
+id: 4
+data: {"seq":4,"run_id":"28e67bc9-d9e7-4995-ab9e-fbb663d6592b","at":1794543685257,"author":"run","kind":"run_ended","status":"completed","outcome":{"greeting":"hello ada"},"run_usage":{"by_model":[],"by_step":[],"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"calls":0,"input_tokens":0,"output_image_tokens":0,"output_tokens":0}}
+

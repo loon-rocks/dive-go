@@ -1,0 +1,46 @@
+version: 3
+identifier: file_issue
+name: File an issue
+description: Files an issue in the caller's tracker, reads it back and reports which tenant and user it was filed for.
+input_schema:
+  type: object
+  required: [title]
+  properties:
+    title:
+      type: string
+      description: One-line summary of the problem
+    body:
+      type: string
+      description: Markdown details
+      default: ""
+    priority:
+      type: string
+      enum: [low, normal, urgent]
+      default: normal
+output_schema:
+  type: object
+  required: [id, url, tenant, created_by]
+  properties:
+    id: { type: string }
+    url: { type: string }
+    tenant: { type: string }
+    created_by: { type: string }
+steps:
+  - id: E0
+    tool_name: user__create_issue
+    input:
+      title: "{{input.title}}"
+      body: "{{input.body}}"
+      priority: "{{input.priority}}"
+    reasoning: Files the issue as the run's user, in the run's tenant.
+  - id: E1
+    tool_name: user__get_issue
+    input:
+      id: "{{E0.id}}"
+    reasoning: Reads the issue back so the result shows which tenant and user the app saw.
+finish:
+  output:
+    id: "{{E1.id}}"
+    url: "{{E0.url}}"
+    tenant: "{{E1.tenant}}"
+    created_by: "{{E1.created_by}}"

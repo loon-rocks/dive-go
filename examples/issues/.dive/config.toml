@@ -1,0 +1,21 @@
+version = 8
+
+[http]
+token_origins = ["http://127.0.0.1:8080", "http://localhost:8080"]
+
+[identities.ada]
+tenant = "acme"
+user = "ada@example.com"
+claims = { role = "admin" }
+
+[identities.vic]
+tenant = "acme"
+user = "vic@example.com"
+claims = { role = "viewer" }
+
+[identities.hank]
+tenant = "globex"
+user = "hank@example.com"
+
+[dev]
+identity = "ada"

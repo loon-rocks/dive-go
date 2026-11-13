@@ -1,0 +1,55 @@
+[tools]
+go = "1.26"
+
+[env]
+DIVE_VERSION = "v0.19.0"
+STATICCHECK_VERSION = "v0.8.2"
+
+[tasks.build]
+description = "Build every package"
+run = "go build ./..."
+
+[tasks.test]
+description = "Run every test with the race detector"
+run = "go test -race ./..."
+
+[tasks.fmt]
+description = "Format the code"
+run = "gofmt -w ."
+
+[tasks."fmt:check"]
+description = "Fail when a file isn't gofmt-formatted"
+run = 'test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }'
+
+[tasks.vet]
+description = "Run go vet"
+run = "go vet ./..."
+
+[tasks.staticcheck]
+description = "Run staticcheck at the pinned version"
+run = 'go run "honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}" ./...'
+
+[tasks.lint]
+description = "gofmt, go vet and staticcheck"
+depends = ["fmt:check", "vet", "staticcheck"]
+
+[tasks.generate]
+description = "Regenerate examples/issues: its tool files and typed plans"
+dir = "examples/issues"
+run = "go generate ./..."
+
+[tasks."generate:check"]
+description = "Fail when examples/issues is stale"
+depends = ["generate"]
+run = [
+    "git diff --exit-code -- examples/issues",
+    'test -z "$(git status --porcelain -- examples/issues)" || { git status --porcelain -- examples/issues; exit 1; }',
+]
+
+[tasks."openapi:drift"]
+description = "Diff the wire types' copy of openapi.json against the pinned dive release"
+run = 'curl -fsSL "https://raw.githubusercontent.com/loon-rocks/dive/${DIVE_VERSION}/docs/openapi.json" | diff -u internal/wire/testdata/openapi.json -'
+
+[tasks.e2e]
+description = "Run the client against a local dive serve --dev-key"
+run = "./scripts/e2e.sh"

@@ -1,0 +1,47 @@
+version: 5
+name: options
+description: Retries, a timeout and an enum from the Schema hook.
+kind: http
+generated: dive-go
+method: POST
+url: ${APP_URL}/dive/tools/options
+read_only: false
+timeout_secs: 2
+retry:
+  attempts: 3
+input_schema:
+  additionalProperties: false
+  properties:
+    body:
+      description: Markdown details
+      enum:
+        - low
+        - normal
+        - urgent
+      type: string
+    count:
+      minimum: 1
+      type: integer
+    ratio:
+      type: number
+    title:
+      description: One-line summary of the problem
+      type: string
+    urgent:
+      type: boolean
+  required:
+    - title
+    - count
+  type: object
+output_schema:
+  additionalProperties: false
+  properties:
+    id:
+      type: string
+    url:
+      format: uri
+      type: string
+  required:
+    - id
+    - url
+  type: object

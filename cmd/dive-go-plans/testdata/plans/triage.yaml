@@ -1,0 +1,39 @@
+version: 3
+identifier: triage
+name: Triage
+description: Triages an issue.
+input_schema:
+  type: object
+  required: [issue]
+  properties:
+    issue: { type: string, description: The issue key }
+    limit: { type: integer, default: 5 }
+    dry_run: { type: boolean }
+    labels: { type: array, items: { type: string } }
+    reporter:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string }
+        api_key: { type: [string, "null"] }
+    meta: { type: object, additionalProperties: { type: number } }
+output_schema:
+  type: object
+  required: [priority, team, related]
+  properties:
+    priority: { type: string, enum: [p0, p1, p2] }
+    team: { type: string }
+    score: { type: number }
+    related:
+      type: array
+      items:
+        type: object
+        properties:
+          id: { type: string }
+          url: { type: string }
+    raw: {}
+steps:
+  - id: E0
+    tool_name: exit
+    input: { status: success, message: done }
+finish: silent

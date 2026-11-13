@@ -1,0 +1,93 @@
+version: 5
+name: nested
+description: Nested structs, slices, maps, pointers and time.
+kind: http
+generated: dive-go
+method: POST
+url: ${APP_URL}/dive/tools/nested
+read_only: true
+input_schema:
+  additionalProperties: false
+  properties:
+    assignee:
+      additionalProperties: false
+      properties:
+        color:
+          type: string
+        name:
+          description: The label's name
+          type: string
+      required:
+        - name
+      type:
+        - "null"
+        - object
+    bytes:
+      items:
+        type: integer
+      maxItems: 2
+      minItems: 2
+      type: array
+    due:
+      type: string
+    fields:
+      additionalProperties:
+        type: string
+      type: object
+    issue:
+      additionalProperties: false
+      properties:
+        labels:
+          items:
+            additionalProperties: false
+            properties:
+              color:
+                type: string
+              name:
+                description: The label's name
+                type: string
+            required:
+              - name
+            type: object
+          type:
+            - "null"
+            - array
+        title:
+          type: string
+      required:
+        - title
+      type: object
+    tags:
+      items:
+        type: string
+      type:
+        - "null"
+        - array
+  required:
+    - issue
+    - tags
+  type: object
+output_schema:
+  additionalProperties: false
+  properties:
+    extra:
+      additionalProperties: true
+      type: object
+    labels:
+      items:
+        additionalProperties: false
+        properties:
+          color:
+            type: string
+          name:
+            description: The label's name
+            type: string
+        required:
+          - name
+        type: object
+      type:
+        - "null"
+        - array
+  required:
+    - labels
+  type: object

@@ -1,0 +1,42 @@
+version: 5
+name: create_issue
+description: Creates an issue in the tenant's tracker and returns its id and URL.
+kind: http
+generated: dive-go
+method: POST
+url: ${APP_URL}/dive/tools/create_issue
+read_only: false
+retry:
+  attempts: 3
+input_schema:
+  additionalProperties: false
+  properties:
+    body:
+      description: Markdown details, steps to reproduce
+      type: string
+    priority:
+      description: low, normal or urgent; normal when unsure
+      enum:
+        - low
+        - normal
+        - urgent
+      type: string
+    title:
+      description: One-line summary of the problem
+      type: string
+  required:
+    - title
+  type: object
+output_schema:
+  additionalProperties: false
+  properties:
+    id:
+      description: The new issue's id
+      type: string
+    url:
+      description: Where people read the issue
+      type: string
+  required:
+    - id
+    - url
+  type: object

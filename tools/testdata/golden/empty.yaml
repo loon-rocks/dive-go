@@ -1,0 +1,15 @@
+version: 5
+name: empty
+description: No input and a map output.
+kind: http
+generated: dive-go
+method: POST
+url: ${APP_URL}/dive/tools/empty
+read_only: true
+input_schema:
+  additionalProperties: false
+  type: object
+output_schema:
+  additionalProperties:
+    type: integer
+  type: object

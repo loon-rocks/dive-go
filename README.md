@@ -6,7 +6,7 @@ Go SDK for [Dive](https://loon.rocks) as a service. Define Dive tools as Go func
 go get github.com/loon-rocks/dive-go
 ```
 
-Go 1.23 or later.
+Go 1.23 or later, and Dive v0.20.0 or later: `kind: http` tool files and dev identities are new in v0.20.0.
 
 | Package | For |
 | --- | --- |

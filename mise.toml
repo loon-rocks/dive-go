@@ -2,7 +2,7 @@
 go = "1.26"
 
 [env]
-DIVE_VERSION = "v0.19.0"
+DIVE_VERSION = "v0.20.0"
 STATICCHECK_VERSION = "v0.8.2"
 
 [tasks.build]
